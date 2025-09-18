@@ -34,8 +34,12 @@ export default function Home() {
           onClick={() => signIn('google')}
           className="px-6 py-3 bg-blue-500 text-white rounded hover:bg-blue-600"
         >
-          Sign in with Googlex
+          Sign in with Google
         </button>
+        {/* Test element to verify Tailwind is working */}
+        <div className="mt-4 p-4 bg-green-100 border border-green-300 rounded">
+          <p className="text-green-800 text-sm">✅ Tailwind CSS is working!</p>
+        </div>
       </div>
     </div>
   )
