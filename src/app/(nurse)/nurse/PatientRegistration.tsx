@@ -11,8 +11,10 @@ import {
   AlertCircle,
   CheckCircle
 } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 const PatientRegistration: React.FC = () => {
+  const { data: session } = useSession();
   const [formData, setFormData] = useState({
     studentId: '',
     name: '',
@@ -22,9 +24,9 @@ const PatientRegistration: React.FC = () => {
     bloodPressureSystolic: '',
     bloodPressureDiastolic: '',
     weight: '',
-    height: '',
     consultationNotes: '',
-    chiefComplaint: ''
+    branch: '',
+    section: '',
   });
 
   const [errors, setErrors] = useState<{[key: string]: string}>({});
@@ -48,7 +50,7 @@ const PatientRegistration: React.FC = () => {
 
     // Auto-generate email from student ID
     if (name === 'studentId' && value) {
-      const email = `${value.toLowerCase()}@rgukitrkv.ac.in`;
+      const email = `r${value.toLowerCase()}@rguktrkv.ac.in`;
       setFormData(prev => ({
         ...prev,
         email: email
@@ -75,10 +77,6 @@ const PatientRegistration: React.FC = () => {
       newErrors.age = 'Please enter a valid age';
     }
 
-    if (!formData.chiefComplaint.trim()) {
-      newErrors.chiefComplaint = 'Chief complaint is required';
-    }
-
     // Validate vitals if provided
     if (formData.temperature && (parseFloat(formData.temperature) < 90 || parseFloat(formData.temperature) > 110)) {
       newErrors.temperature = 'Please enter a valid temperature (90-110°F)';
@@ -93,42 +91,118 @@ const PatientRegistration: React.FC = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
+  e.preventDefault();
+
+  if (!validateForm()) {
+    return;
+  }
+
+  setIsSubmitting(true);
+
+  try {
+    // Combine BP
+    const bp =
+      formData.bloodPressureSystolic && formData.bloodPressureDiastolic
+        ? `${formData.bloodPressureSystolic}/${formData.bloodPressureDiastolic}`
+        : null;
+
+    // nurseId – get from session or context
+    const nurseId = session?.user?.id;
+
+    // 1️⃣ Check if student exists
+    let studentIdBackend = null;
+    const checkStudentRes = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/students/id_number/${formData.studentId}`
+    );
+
+    if (checkStudentRes.ok) {
+      const studentData = await checkStudentRes.json();
+      studentIdBackend = studentData.id; // backend student.id
+      console.log("Existing student found:", studentData);
+    } else if (checkStudentRes.status === 404) {
+      // 2️⃣ Student does not exist, create it
+      const createStudentRes = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/students`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id_number: formData.studentId,
+            name: formData.name,
+            email: formData.email,
+            branch: formData.branch || null,
+            section: formData.section || null,
+          }),
+        }
+      );
+
+      if (!createStudentRes.ok) {
+        throw new Error(`Error creating student: ${createStudentRes.statusText}`);
+      }
+
+      const newStudent = await createStudentRes.json();
+      studentIdBackend = newStudent.id;
+      console.log("Student created:", newStudent);
+    } else {
+      throw new Error(`Error checking student: ${checkStudentRes.statusText}`);
     }
 
-    setIsSubmitting(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setSubmitSuccess(true);
-      // Reset form after 3 seconds
-      setTimeout(() => {
-        setFormData({
-          studentId: '',
-          name: '',
-          email: '',
-          age: '',
-          temperature: '',
-          bloodPressureSystolic: '',
-          bloodPressureDiastolic: '',
-          weight: '',
-          height: '',
-          consultationNotes: '',
-          chiefComplaint: ''
-        });
-        setSubmitSuccess(false);
-      }, 3000);
-    } catch (error) {
-      console.error('Error submitting form:', error);
-    } finally {
-      setIsSubmitting(false);
+    // 3️⃣ Build prescription payload with student.id
+    const payload = {
+      student_id: studentIdBackend,
+      nurse_id: nurseId,
+      notes: formData.consultationNotes || null,
+      weight: formData.weight || null,
+      bp: bp,
+      temperature: formData.temperature || null,
+    };
+
+    console.log("Prescription Payload:", payload);
+
+    // 4️⃣ Create prescription
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/prescriptions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Error creating prescription: ${res.statusText}`);
     }
-  };
+
+    const data = await res.json();
+    console.log("Prescription created:", data);
+
+    setSubmitSuccess(true);
+
+    // Reset form after 3 seconds
+    setTimeout(() => {
+      setFormData({
+        studentId: "",
+        name: "",
+        email: "",
+        age: "",
+        temperature: "",
+        bloodPressureSystolic: "",
+        bloodPressureDiastolic: "",
+        weight: "",
+        consultationNotes: "",
+        branch: "",
+        section: "",
+      });
+      setSubmitSuccess(false);
+    }, 3000);
+  } catch (error) {
+    console.error("Error submitting form:", error);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
 
   if (submitSuccess) {
     return (
@@ -342,7 +416,7 @@ const PatientRegistration: React.FC = () => {
                 )}
               </div>
 
-              <div>
+              {/* <div>
                 <label htmlFor="height" className="block text-sm font-medium text-gray-700 mb-2">
                   Height (cm)
                 </label>
@@ -355,7 +429,7 @@ const PatientRegistration: React.FC = () => {
                   placeholder="170"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-              </div>
+              </div> */}
             </div>
           </div>
 
@@ -367,29 +441,6 @@ const PatientRegistration: React.FC = () => {
             </h3>
             
             <div className="space-y-4">
-              <div>
-                <label htmlFor="chiefComplaint" className="block text-sm font-medium text-gray-700 mb-2">
-                  Chief Complaint <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  id="chiefComplaint"
-                  name="chiefComplaint"
-                  value={formData.chiefComplaint}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="Describe the main reason for the patient's visit"
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
-                    errors.chiefComplaint ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                />
-                {errors.chiefComplaint && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <AlertCircle className="w-4 h-4 mr-1" />
-                    {errors.chiefComplaint}
-                  </p>
-                )}
-              </div>
-
               <div>
                 <label htmlFor="consultationNotes" className="block text-sm font-medium text-gray-700 mb-2">
                   Initial Assessment Notes

@@ -1,3 +1,4 @@
+'use client';
 import React, { useState } from 'react';
 import { 
   Stethoscope, 
@@ -9,8 +10,11 @@ import {
   Menu, 
   X,
   Bell,
-  Settings
+  Settings,
+  LogOut
 } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // ✅ App Router import
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavbarProps {
   activeTab: string;
@@ -19,6 +23,9 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const router = useRouter();
+  const { logout } = useAuth();
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -33,8 +40,20 @@ const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     setIsMobileMenuOpen(false);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('role');
+    localStorage.removeItem('email');
+    window.location.href = '/';
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
+    logout();
+  };
+
   return (
-    <nav className="fixed top-0 left-0 right-0 bg-white shadow-lg border-b border-gray-200 z-50">
+    <>
+      <nav className="fixed top-0 left-0 right-0 bg-white shadow-lg border-b border-gray-200 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo and Brand */}
@@ -83,6 +102,14 @@ const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
               <Settings className="w-5 h-5" />
             </button>
 
+            {/* Logout Button - Desktop */}
+            <button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="hidden md:flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
             {/* Mobile menu button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -125,11 +152,60 @@ const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 <Settings className="w-5 h-5" />
                 <span className="font-medium">Settings</span>
               </button>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setShowLogoutConfirm(true);
+                }}
+                className="flex items-center space-x-3 w-full px-4 py-3 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors duration-200"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="font-medium">Logout</span>
+              </button>
             </div>
           </div>
         </div>
       )}
-    </nav>
+      </nav>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <LogOut className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Confirm Logout</h3>
+                <p className="text-sm text-gray-600">Are you sure you want to logout?</p>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6">
+              <p className="text-sm text-yellow-800">
+                You will be signed out of your account and redirected to the login page.
+              </p>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
